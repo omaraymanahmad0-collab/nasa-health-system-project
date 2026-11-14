@@ -1,0 +1,484 @@
+HTML_UI = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTRA // ORBITAL EVA OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<style>
+  :root {
+    --bg-deep: #02040A;
+    --glass: rgba(10, 16, 30, 0.65);
+    --glass-strong: rgba(10, 16, 30, 0.85);
+    --stroke: rgba(148, 163, 184, 0.18);
+    --text-main: #F1F5F9;
+    --text-dim: #94A3B8;
+    --mint: #2DD4BF;
+    --amber: #FBBF24;
+    --coral: #FB7185;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+  }
+
+  body {
+    background: radial-gradient(circle at 50% 45%, #070D1D 0%, var(--bg-deep) 85%);
+    color: var(--text-main);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #stage3d {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+    z-index: 1;
+  }
+  #stage3d:active { cursor: grabbing; }
+
+  .top-bar {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    right: 24px;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+  }
+
+  .capsule {
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--stroke);
+    border-radius: 99px;
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 12px var(--mint);
+    transition: all 0.25s;
+  }
+  .status-dot.warn { background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+  .status-dot.crit { background: var(--coral); box-shadow: 0 0 16px var(--coral); }
+
+  .brand-name { font-weight: 700; font-size: 14px; letter-spacing: 0.04em; }
+  .brand-sub { font-size: 12px; color: var(--text-dim); }
+
+  .crew-select {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+  }
+  .crew-select option { background: #090E1A; color: #F1F5F9; }
+
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--mint);
+  }
+
+  .hud-wing {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    pointer-events: none;
+  }
+  .hud-wing.left { left: 28px; }
+  .hud-wing.right { right: 28px; align-items: flex-end; }
+
+  .hud-node {
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
+    padding: 14px 18px;
+    width: 215px;
+    transition: all 0.25s ease;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  }
+  .hud-node.alert {
+    border-color: rgba(251, 113, 133, 0.75);
+    background: rgba(66, 18, 32, 0.76);
+    box-shadow: 0 0 28px rgba(251, 113, 133, 0.3);
+  }
+  .node-kicker {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+  .node-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 4px;
+    color: var(--text-main);
+  }
+  .hud-node.alert .node-value { color: var(--coral); }
+  .node-foot { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+  .ring-orb {
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
+    padding: 12px;
+    width: 215px;
+    text-align: center;
+    transition: all 0.25s;
+  }
+  .ring-orb.vibe {
+    border-color: var(--coral);
+    animation: orbShake 0.14s infinite;
+  }
+  @keyframes orbShake {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-2px, 1px); }
+    75% { transform: translate(2px, -1px); }
+  }
+  #ringMini { width: 140px; height: 82px; display: block; margin: 0 auto; }
+
+  .dock-wrap {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: max-content;
+    max-width: 95vw;
+  }
+
+  .ai-toast {
+    background: var(--glass-strong);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    border-radius: 99px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+    transition: all 0.25s;
+  }
+  .ai-toast.warn { border-color: var(--amber); background: rgba(54, 38, 12, 0.9); }
+  .ai-toast.crit { border-color: var(--coral); background: rgba(68, 16, 29, 0.92); }
+  .toast-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: rgba(45, 212, 191, 0.16);
+    color: var(--mint);
+  }
+  .ai-toast.warn .toast-badge { background: rgba(251, 191, 36, 0.2); color: var(--amber); }
+  .ai-toast.crit .toast-badge { background: rgba(251, 113, 133, 0.22); color: var(--coral); }
+
+  .dock {
+    background: var(--glass-strong);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid var(--stroke);
+    border-radius: 22px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.75);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .dock-group { display: flex; align-items: center; gap: 5px; }
+  .dock-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 0 8px;
+  }
+  .dock-divider { width: 1px; height: 26px; background: var(--stroke); margin: 0 4px; }
+
+  .pill-btn {
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-dim);
+    padding: 8px 13px;
+    border-radius: 13px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .pill-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.11); }
+  .pill-btn.active {
+    background: rgba(251, 113, 133, 0.2);
+    border-color: rgba(251, 113, 133, 0.55);
+    color: #FFE4E6;
+  }
+  .pill-btn.nom.active {
+    background: rgba(45, 212, 191, 0.18);
+    border-color: rgba(45, 212, 191, 0.5);
+    color: var(--mint);
+  }
+
+  .fix-btn {
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 13px;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.42;
+    cursor: not-allowed;
+    transition: all 0.2s ease;
+  }
+  .fix-btn.ready {
+    opacity: 1;
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.24), rgba(56, 189, 248, 0.24));
+    border-color: var(--mint);
+    color: #FFFFFF;
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.35);
+    animation: pulseMint 1.3s infinite;
+  }
+  .fix-btn.ready:hover {
+    background: var(--mint);
+    color: #062825;
+    transform: translateY(-1px);
+  }
+  @keyframes pulseMint {
+    50% { box-shadow: 0 0 28px rgba(45, 212, 191, 0.6); }
+  }
+  /* AI co-pilot panel */
+  .ai-bar { height: 4px; border-radius: 3px; background: rgba(148, 163, 184, 0.18); margin-top: 7px; overflow: hidden; }
+  .ai-bar-fill { height: 100%; width: 0%; background: var(--mint); transition: width 0.4s ease, background 0.4s ease; }
+  .hud-node.ai-watch { border-color: var(--amber); }
+  .hud-node.ai-warn { border-color: var(--coral); }
+
+  /* Crew health AI */
+  .hud-node.health-watch { border-color: var(--amber); }
+  .hud-node.health-warn { border-color: var(--amber); background: rgba(54, 38, 12, 0.80); }
+  .hud-node.health-crit {
+    border-color: rgba(251, 113, 133, 0.75);
+    background: rgba(66, 18, 32, 0.78);
+    box-shadow: 0 0 28px rgba(251, 113, 133, 0.3);
+  }
+  .hud-node.health-warn .node-value { color: var(--amber); }
+  .hud-node.health-crit .node-value { color: var(--coral); }
+  .health-action { color: var(--text-main); opacity: 0.85; }
+  .rpt-btn {
+    margin-top: 8px; width: 100%; padding: 7px 10px; border-radius: 11px; cursor: pointer;
+    border: 1px solid var(--coral); background: rgba(251, 113, 133, 0.18);
+    color: #FFE4E6; font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+  }
+  .rpt-btn:hover { background: var(--coral); color: #2A0A12; }
+
+  .err-banner {
+    position: fixed; top: 78px; left: 50%; transform: translateX(-50%); z-index: 15;
+    display: none; align-items: center; gap: 12px; max-width: min(900px, 92vw);
+    padding: 9px 12px 9px 18px; border-radius: 99px; font-size: 13px; font-weight: 600;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.7);
+  }
+  .err-banner.show { display: flex; }
+  .err-banner.crit { background: rgba(68, 16, 29, 0.94); border: 1px solid var(--coral); color: #FFE4E6; animation: errPulse 1.2s infinite; }
+  .err-banner.warn { background: rgba(54, 38, 12, 0.94); border: 1px solid var(--amber); color: #FEF3C7; }
+  @keyframes errPulse { 50% { box-shadow: 0 0 34px rgba(251, 113, 133, 0.55); } }
+  .err-banner button {
+    border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 99px;
+    padding: 5px 13px; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .err-banner button:hover { background: rgba(255, 255, 255, 0.14); }
+
+  .modal {
+    position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;
+    background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(6px);
+  }
+  .modal.show { display: flex; }
+  .modal-card {
+    width: min(720px, 94vw); max-height: 86vh; display: flex; flex-direction: column;
+    background: var(--glass-strong); border: 1px solid var(--stroke); border-radius: 20px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85); overflow: hidden;
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center; padding: 14px 18px;
+    border-bottom: 1px solid var(--stroke); font-weight: 700; font-size: 14px;
+  }
+  .modal-head button, .modal-foot button {
+    border: 1px solid var(--stroke); background: rgba(255, 255, 255, 0.06); color: var(--text-main);
+    border-radius: 11px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .modal-head button:hover, .modal-foot button:hover { background: rgba(255, 255, 255, 0.14); }
+  #rptBody {
+    margin: 0; padding: 16px 18px; overflow: auto; font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; line-height: 1.55; color: var(--text-main); white-space: pre-wrap;
+  }
+  .modal-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--stroke); }
+</style>
+</head>
+<body>
+
+  <canvas id="stage3d"></canvas>
+
+  <header class="top-bar">
+    <div class="capsule">
+      <span id="statusDot" class="status-dot"></span>
+      <span class="brand-name">ASTRA // ORBITAL EVA OS</span>
+      <span id="modelTag" class="brand-sub">Photorealistic PBR xEMU Digital Twin</span>
+    </div>
+
+    <div class="capsule">
+      <select id="crewSelect" class="crew-select" onchange="switchCrew(this.value)">
+        <option value="amira">Cdr. Amira Hassan</option>
+        <option value="lukas">FE. Lukas Berg</option>
+        <option value="yuki">MS. Yuki Tanaka</option>
+      </select>
+      <span style="color:var(--stroke)">|</span>
+      <span id="clock" class="mono">MET 04:22:00</span>
+    </div>
+  </header>
+
+  <div id="errBanner" class="err-banner">
+    <span>&#9888;</span>
+    <span id="errText"></span>
+    <button onclick="openReport(document.getElementById('errBanner').dataset.aid)">View report</button>
+  </div>
+
+  <aside class="hud-wing left">
+    <div id="node-neut" class="hud-node">
+      <div class="node-kicker"><span>CANS Neutron</span><span>RBE 15x</span></div>
+      <div id="valNeut" class="node-value">6.2 µSv/h</div>
+      <div id="valCum" class="node-foot">Career: 184.2 / 600 mSv</div>
+    </div>
+
+    <div id="node-hr" class="hud-node">
+      <div class="node-kicker"><span>Heart Rate</span><span>PPG</span></div>
+      <div id="valHr" class="node-value">64 BPM</div>
+      <canvas id="ppgWave" height="28" style="width:100%; margin-top:4px"></canvas>
+    </div>
+
+    <div id="node-ai" class="hud-node">
+      <div class="node-kicker"><span>AI Co-pilot</span><span id="aiTag">LOADING</span></div>
+      <div id="valAi" class="node-value">—</div>
+      <div id="valAiFoot" class="node-foot">Loading models…</div>
+      <div class="ai-bar"><div id="aiBarFill" class="ai-bar-fill"></div></div>
+    </div>
+  </aside>
+
+  <aside class="hud-wing right">
+    <div id="node-o2" class="hud-node">
+      <div class="node-kicker"><span>Suit O2 & Pressure</span><span>PLSS</span></div>
+      <div id="valO2Psi" class="node-value">98.6% · 4.30</div>
+      <div id="valTemp" class="node-foot">Skin Temp: 36.6 °C</div>
+    </div>
+
+    <div id="node-health" class="hud-node">
+      <div class="node-kicker"><span>Crew Health AI</span><span id="healthTag">...</span></div>
+      <div id="valHealth" class="node-value">-- / 100</div>
+      <div id="healthFeedback" class="node-foot">Waiting for telemetry...</div>
+      <div id="healthAction" class="node-foot health-action"></div>
+      <div class="ai-bar"><div id="healthBar" class="ai-bar-fill"></div></div>
+      <button id="reportBtn" class="rpt-btn" style="display:none" onclick="openReport()">VIEW INCIDENT REPORT</button>
+    </div>
+
+    <div id="ringOrb" class="ring-orb">
+      <div class="node-kicker" style="justify-content:center"><span>ASTRA-RING HAPTIC</span></div>
+      <canvas id="ringMini" width="140" height="82"></canvas>
+      <div id="ringLabel" class="node-foot" style="color:var(--mint); font-weight:600">Standby · Nominal</div>
+    </div>
+  </aside>
+
+  <div class="dock-wrap">
+    <div id="aiToast" class="ai-toast">
+      <span id="toastBadge" class="toast-badge">NORMAL</span>
+      <span id="toastMsg">All suit life-support and neutron sensors balanced.</span>
+    </div>
+
+    <div class="dock">
+      <div class="dock-group">
+        <span class="dock-label">Simulate</span>
+        <button id="sc-Nominal" class="pill-btn nom active" onclick="setScenario('Nominal')">Normal</button>
+        <button id="sc-Solar Storm" class="pill-btn" onclick="setScenario('Solar Storm')">Solar Storm</button>
+        <button id="sc-Suit Leak" class="pill-btn" onclick="setScenario('Suit Leak')">Suit Leak</button>
+        <button id="sc-Thermal Spike" class="pill-btn" onclick="setScenario('Thermal Spike')">Thermal Spike</button>
+      </div>
+
+      <div class="dock-divider"></div>
+
+      <div class="dock-group">
+        <span class="dock-label">Suit Fix</span>
+        <button id="fix-shield_shelter" class="fix-btn" onclick="resolveWith('shield_shelter')">Deploy Shielding</button>
+        <button id="fix-o2_boost" class="fix-btn" onclick="resolveWith('o2_boost')">O2 Pressure Purge</button>
+        <button id="fix-cool_max" class="fix-btn" onclick="resolveWith('cool_max')">Max LCVG Cooling</button>
+      </div>
+
+      <div class="dock-divider"></div>
+
+      <div class="dock-group">
+        <button class="pill-btn" onclick="focusView('FULL')">Suit</button>
+        <button class="pill-btn" onclick="focusView('HELMET')">Helmet</button>
+        <button class="pill-btn" onclick="focusView('CHEST')">Chest</button>
+        <button class="pill-btn" onclick="focusView('RING')">Ring</button>
+      </div>
+    </div>
+  </div>
+
+<div id="reportModal" class="modal" onclick="if (event.target === this) closeReport()">
+    <div class="modal-card">
+      <div class="modal-head"><span id="rptTitle">Incident report</span><button onclick="closeReport()">Close</button></div>
+      <pre id="rptBody"></pre>
+      <div class="modal-foot">
+        <button onclick="copyReport()">Copy</button>
+        <button onclick="downloadReport()">Download .txt</button>
+      </div>
+    </div>
+  </div>
